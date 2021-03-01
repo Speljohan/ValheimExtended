@@ -4,12 +4,12 @@ ValheimExtended is a living collaborative project to create new and interesting 
 ## Prerequisites
 You need to use [BepInExPack_Valheim](https://valheim.thunderstore.io/package/denikson/BepInExPack_Valheim/) with your Valheim installation.
 
-#Building it yourself
+# Building it yourself
 If you wish to build this assembly yourself, you need to run [Assembly Publicizer](https://github.com/CabbageCrow/AssemblyPublicizer/releases) on all game-specific libraries in your installation folder. 
 These are the libraries prefixed with "assembly_" and can typically be found in "SteamLibrary\steamapps\common\Valheim\valheim_Data\Managed"
 For more information, see documentation for [HarmonyX](https://github.com/BepInEx/HarmonyX).
 
-#Using a precompiled binary
+# Using a precompiled binary
 Coming soon
 
 # Mod List
