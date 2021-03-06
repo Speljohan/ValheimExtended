@@ -1,4 +1,5 @@
-﻿using System.Linq;
+﻿using System;
+using System.Linq;
 using HarmonyLib;
 using UnityEngine;
 
@@ -7,8 +8,7 @@ using UnityEngine;
 /// </summary>
 namespace ValheimExtended.LibTyr
 {
-
-    [HarmonyPatch(typeof(ItemDrop))]
+        [HarmonyPatch(typeof(ItemDrop))]
     public static class ItemDropPatcher
     {
 
@@ -16,24 +16,25 @@ namespace ValheimExtended.LibTyr
         /// Test code
         /// TODO: To be replaced 
         /// </summary>
-        [HarmonyPrefix]
-        [HarmonyPatch("Start")]
-        static void Start(ref ItemDrop __instance)
+        [HarmonyPostfix]
+        [HarmonyPatch("Awake")]
+        static void Awake(ref ItemDrop __instance)
         {
-            if (__instance.m_nview && __instance.m_nview.IsValid())
+            var prefabName = __instance.GetPrefabName(__instance.gameObject.name);
+
+            if (prefabName == "MushroomYellow")
             {
                 if (__instance.m_itemData is TyrData)
                 {
-                    var tyrData = (TyrData)__instance.m_itemData;
+                    var tyrData = __instance.m_itemData as TyrData;
 
-                    if (tyrData.m_shared.m_name == "$item_mushroomyellow")
-                    {
-                        tyrData.Set("dye_color", 15190091);
-                        /*var renderer = __instance.gameObject.GetComponentInChildren<MeshRenderer>();
-                        renderer.material.SetColor("_EmissionColor", Utils.ToColor(tyrData.GetInt("dye_color")));*/
-                    }
+                    tyrData.Set("dye_color", 15190091, false);
+
+                    return;
                 }
             }
+            /*var renderer = __instance.gameObject.GetComponentInChildren<MeshRenderer>();
+            renderer.material.SetColor("_EmissionColor", Utils.ToColor(tyrData.GetInt("dye_color")));*/
 
         }
 
@@ -41,13 +42,13 @@ namespace ValheimExtended.LibTyr
         [HarmonyPatch("DropItem")]
         static bool DropItem(ref ItemDrop __result, ref ItemDrop.ItemData item, ref int amount, ref Vector3 position, ref Quaternion rotation)
         {
-            ItemDrop component = Object.Instantiate(item.m_dropPrefab, position, rotation).GetComponent<ItemDrop>();
+            ItemDrop component = UnityEngine.Object.Instantiate(item.m_dropPrefab, position, rotation).GetComponent<ItemDrop>();
             component.m_itemData = item.Clone();
             if (item is TyrData)
             {
                 var otherData = (TyrData)item;
                 var thisData = (TyrData)component.m_itemData;
-                thisData.From(otherData);
+                thisData.Copy(otherData);
 
                 component.m_itemData = thisData;
             }
@@ -75,26 +76,30 @@ namespace ValheimExtended.LibTyr
                 {
                     var tyrData = (TyrData)__instance.m_itemData;
 
-                    if (tyrData.isEmpty())
+                    if (tyrData.IsEmpty())
                     {
                         return;
                     }
-
-                        foreach (var item in tyrData.m_floats)
+                    var mutable = tyrData.m_properties.Where((i) => i.Value.m_mutable);
+                    foreach (var item in mutable)
                     {
-                        __instance.m_nview.m_zdo.Set("libtyr_" + item.Key, item.Value);
-                    }
-                    foreach (var item in tyrData.m_ints)
-                    {
-                        __instance.m_nview.m_zdo.Set("libtyr_" + item.Key, item.Value);
-                    }
-                    foreach (var item in tyrData.m_longs)
-                    {
-                        __instance.m_nview.m_zdo.Set("libtyr_" + item.Key, item.Value);
-                    }
-                    foreach (var item in tyrData.m_strings)
-                    {
-                        __instance.m_nview.m_zdo.Set("libtyr_" + item.Key, item.Value);
+                        var val = item.Value.m_value;
+                        if (val is float)
+                        {
+                            __instance.m_nview.m_zdo.Set("libtyr_" + item.Key, item.Value.GetValue<float>());
+                        }
+                        else if (val is int)
+                        {
+                            __instance.m_nview.m_zdo.Set("libtyr_" + item.Key, item.Value.GetValue<int>());
+                        }
+                        else if (val is long)
+                        {
+                            __instance.m_nview.m_zdo.Set("libtyr_" + item.Key, item.Value.GetValue<long>());
+                        }
+                        else if (val is string)
+                        {
+                            __instance.m_nview.m_zdo.Set("libtyr_" + item.Key, item.Value.GetValue<string>());
+                        }
                     }
                     Debug.Log("[TyrData] Data written to ZDO");
                 }
@@ -110,21 +115,23 @@ namespace ValheimExtended.LibTyr
             {
                 var tyrData = (TyrData)__instance.m_itemData;
 
-                foreach (var item in tyrData.m_floats.Keys.ToList())
+                foreach (var item in tyrData.m_properties.Keys.ToList())
                 {
-                    tyrData.m_floats[item] = __instance.m_nview.m_zdo.GetFloat("libtyr_" + item);
-                }
-                foreach (var item in tyrData.m_ints.Keys.ToList())
-                {
-                    tyrData.m_ints[item] = __instance.m_nview.m_zdo.GetInt("libtyr_" + item);
-                }
-                foreach (var item in tyrData.m_longs.Keys.ToList())
-                {
-                    tyrData.m_longs[item] = __instance.m_nview.m_zdo.GetLong("libtyr_" + item);
-                }
-                foreach (var item in tyrData.m_strings.Keys.ToList())
-                {
-                    tyrData.m_strings[item] = __instance.m_nview.m_zdo.GetString("libtyr_" + item);
+                    var nameHash = ("libtyr_" + item).GetStableHashCode();
+                    if (__instance.m_nview.m_zdo.m_floats.ContainsKey(nameHash)) {
+                        tyrData.m_properties[item] = new TyrProperty(item, __instance.m_nview.m_zdo.GetFloat("libtyr_" + item), true);
+                    } else if (__instance.m_nview.m_zdo.m_ints.ContainsKey(nameHash))
+                    {
+                        tyrData.m_properties[item] = new TyrProperty(item, __instance.m_nview.m_zdo.GetInt("libtyr_" + item), true);
+                    }
+                    else if (__instance.m_nview.m_zdo.m_longs.ContainsKey(nameHash))
+                    {
+                        tyrData.m_properties[item] = new TyrProperty(item, __instance.m_nview.m_zdo.GetLong("libtyr_" + item), true);
+                    }
+                    else if (__instance.m_nview.m_zdo.m_strings.ContainsKey(nameHash))
+                    {
+                        tyrData.m_properties[item] = new TyrProperty(item, __instance.m_nview.m_zdo.GetString("libtyr_" + item), true);
+                    }
                 }
                 Debug.Log("[TyrData] Data retrieved from ZDO");
             }

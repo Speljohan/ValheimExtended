@@ -9,154 +9,93 @@ namespace ValheimExtended.LibTyr
     [Serializable]
     class TyrData : ItemDrop.ItemData
     {
-        public Dictionary<string, float> m_floats = new Dictionary<string, float>();
-        public Dictionary<string, int> m_ints = new Dictionary<string, int>();
-        public Dictionary<string, long> m_longs = new Dictionary<string, long>();
-        public Dictionary<string, string> m_strings = new Dictionary<string, string>();
+        public Dictionary<string, TyrProperty> m_properties = new Dictionary<string, TyrProperty>();
 
-
-        public Boolean contains(string key)
+        public void Set(string key, object value, bool mutable = true)
         {
-            return !m_floats.ContainsKey(key) && !m_ints.ContainsKey(key) && !m_longs.ContainsKey(key) && !m_strings.ContainsKey(key);
+            m_properties[key] = new TyrProperty(key, value, mutable);
         }
 
-        public void Set(string key, float value)
+        public TyrProperty Get(string key)
         {
-            m_floats[key] = value;
+            return m_properties[key];
         }
 
-        public void Set(string key, int value)
+        public void Copy(TyrData other)
         {
-            m_ints[key] = value;
+            m_properties = other.m_properties;
         }
 
-        public void Set(string key, long value)
+        public Boolean IsEmpty()
         {
-            m_longs[key] = value;
-        }
-
-        public void Set(string key, string value)
-        {
-            m_strings[key] = value;
-        }
-
-        public float GetFloat(string key)
-        {
-            return m_floats[key];
-        }
-
-        public int GetInt(string key)
-        {
-            return m_ints[key];
-        }
-
-        public long GetLong(string key)
-        {
-            return m_longs[key];
-        }
-
-        public string GetString(string key)
-        {
-            return m_strings[key];
-        }
-
-        public void From(TyrData other)
-        {
-            foreach (var item in other.m_floats)
-            {
-                m_floats[item.Key] = item.Value;
-            }
-
-            foreach (var item in other.m_ints)
-            {
-                m_ints[item.Key] = item.Value;
-            }
-
-            foreach (var item in other.m_longs)
-            {
-                m_longs[item.Key] = item.Value;
-            }
-
-            foreach (var item in other.m_strings)
-            {
-                m_strings[item.Key] = item.Value;
-            }
-        }
-
-        public Boolean isEmpty()
-        {
-            return m_floats.Count == 0 && m_ints.Count == 0 && m_longs.Count == 0 && m_strings.Count == 0;
+            return m_properties.Count == 0;
         }
 
         public void Save(ZPackage pkg)
         {
-            pkg.Write(m_floats.Count);
-            foreach (var item in m_floats)
+            var mutable = m_properties.Where((i) => i.Value.m_mutable);
+
+            pkg.Write(mutable.Count());
+            foreach (var item in mutable)
             {
                 pkg.Write(item.Key);
-                pkg.Write(item.Value);
+
+                var val = item.Value.m_value;
+                if (val is float)
+                {
+                    pkg.Write((int)TyrDataType.FLOAT);
+                    pkg.Write(item.Value.GetValue<float>());
+                } else if (val is int)
+                {
+                    pkg.Write((int)TyrDataType.INT);
+                    pkg.Write(item.Value.GetValue<int>());
+                } else if (val is long)
+                {
+                    pkg.Write((int)TyrDataType.LONG);
+                    pkg.Write(item.Value.GetValue<long>());
+                }
+                else if (val is string)
+                {
+                    pkg.Write((int)TyrDataType.STRING);
+                    pkg.Write(item.Value.GetValue<string>());
+                }
             }
 
-            pkg.Write(m_ints.Count);
-            foreach (var item in m_ints)
-            {
-                pkg.Write(item.Key);
-                pkg.Write(item.Value);
-            }
-
-            pkg.Write(m_longs.Count);
-            foreach (var item in m_longs)
-            {
-                pkg.Write(item.Key);
-                pkg.Write(item.Value);
-            }
-
-            pkg.Write(m_strings.Count);
-            foreach (var item in m_strings)
-            {
-                pkg.Write(item.Key);
-                pkg.Write(item.Value);
-            }
         }
 
         public void Load(ZPackage pkg)
         {
-            int floatCount = pkg.ReadInt();
-            for (int i = 0; i < floatCount; i++)
+            int propertyCount = pkg.ReadInt();
+            for (int i = 0; i < propertyCount; i++)
             {
                 var key = pkg.ReadString();
-                var value = pkg.ReadSingle();
-                m_floats[key] = value;
-            }
-
-            int intCount = pkg.ReadInt();
-            for (int i = 0; i < intCount; i++)
-            {
-                var key = pkg.ReadString();
-                var value = pkg.ReadInt();
-                m_ints[key] = value;
-            }
-
-            int longCount = pkg.ReadInt();
-            for (int i = 0; i < longCount; i++)
-            {
-                var key = pkg.ReadString();
-                var value = pkg.ReadLong();
-                m_longs[key] = value;
-            }
-
-            int stringCount = pkg.ReadInt();
-            for (int i = 0; i < stringCount; i++)
-            {
-                var key = pkg.ReadString();
-                var value = pkg.ReadString();
-                m_strings[key] = value;
+                var dataType = (TyrDataType)Enum.ToObject(typeof(TyrDataType), pkg.ReadInt());
+                if (dataType == TyrDataType.FLOAT)
+                {
+                    var val = pkg.ReadSingle();
+                    m_properties[key] = new TyrProperty(key, val, true);
+                }
+                else if (dataType == TyrDataType.INT)
+                {
+                    var val = pkg.ReadInt();
+                    m_properties[key] = new TyrProperty(key, val, true);
+                }
+                else if (dataType == TyrDataType.LONG)
+                {
+                    var val = pkg.ReadLong();
+                    m_properties[key] = new TyrProperty(key, val, true);
+                }
+                else if (dataType == TyrDataType.STRING)
+                {
+                    var val = pkg.ReadString();
+                    m_properties[key] = new TyrProperty(key, val, true);
+                }
             }
         }
 
         public String GetTyrTooltipText()
         {
-            if (isEmpty())
+            if (IsEmpty())
             {
                 return "";
             }
@@ -167,25 +106,56 @@ namespace ValheimExtended.LibTyr
             sb.Append("TyrData: ");
             sb.Append("\n");
 
-            foreach (var item in m_floats)
+            foreach (var item in m_properties)
             {
-                sb.AppendFormat("\n{0}: <color=orange>{1}</color>", item.Key, item.Value);
-            }
-            foreach (var item in m_ints)
-            {
-                sb.AppendFormat("\n{0}: <color=orange>{1}</color>", item.Key, item.Value);
-            }
-            foreach (var item in m_longs)
-            {
-                sb.AppendFormat("\n{0}: <color=orange>{1}</color>", item.Key, item.Value);
-            }
-            foreach (var item in m_strings)
-            {
-                sb.AppendFormat("\n{0}: <color=orange>{1}</color>", item.Key, item.Value);
+                sb.AppendFormat("\n{0}: <color=orange>{1}</color>", item.Key, item.Value.m_value);
             }
             return sb.ToString();
         }
 
+    }
+
+    class TyrProperty : TyrValue
+    {
+        public String m_name;
+        public bool m_mutable;
+
+        public TyrProperty(string name, object value, bool mutable)
+        {
+            this.m_name = name;
+            this.m_value = value;
+            this.m_mutable = mutable;
+        }
+    }
+
+    public enum TyrDataType
+    {
+        FLOAT = 0,
+        INT = 1,
+        LONG = 2,
+        STRING = 3
+    }
+        
+
+    class TyrValue
+    {
+        public object m_value;
+
+        public T GetValue<T>()
+        {
+            return (T)m_value;
+        }
+
+        public void SetValue<T>(T value)
+        {
+            this.m_value = value;
+        }
+
+        public TyrValue WithValue<T>(T value)
+        {
+            this.m_value = value;
+            return this;
+        }
     }
 
 }
